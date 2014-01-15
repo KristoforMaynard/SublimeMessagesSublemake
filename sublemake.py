@@ -9,7 +9,10 @@ from operator import attrgetter
 
 from Default import exec
 
-from SublimeMessages import message_manager
+try:
+    from SublimeMessages import message_manager
+except ImportError:
+    from Messages import message_manager
 
 def plugin_loaded():
     global build_msg_src

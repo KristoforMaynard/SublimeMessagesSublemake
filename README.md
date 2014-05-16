@@ -9,9 +9,15 @@ This plugin addresses two shortcomings of the ST build system when it comes to b
   This plugin gets automatically called on build, and if the build command is "make", it will correctly handle recursive builds. After the build is complete, lines with errors or warnings will be marked in the gutter. Gutter marks can be cleared with the "Sublemake: Clear Errors (...)" commands, accessible in the command pallet.
 
 Prerequisits:
+-------------
  - SublimeMessages plugin
 
-Gutter mark colors are determined by the following scopes in your sublime color scheme:
+How it works:
+-------------
+All build output is passed through this plugin.
+
+Gutter mark colors are determined by the following scopes in your color scheme:
  - SublimeMessages.error
  - SublimeMessages.warning
  - SublimeMessages.info
+

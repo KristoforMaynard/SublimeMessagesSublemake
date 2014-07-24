@@ -30,14 +30,16 @@ def plugin_unloaded():
 
 class BuildMessageSource(message_manager.LineMessageSource):
     # order indicates severity / preference of icon when > 1 err on a line
-    pth = "Packages/MessagesPylint/"
+    pth = "Packages/Messages/"
     if not os.path.isdir(pth):
-        pth = "Packages/SublimeMessagesPylint/"
-    xpth = pth + "x.png"
+        pth = "Packages/SublimeMessages/"
+    epth = pth + "error.png"
+    wpth = pth + "warning.png"
+    ipth = pth + "info.png"
 
-    markers = OrderedDict([("info", (xpth, "SublimeMessages.info")),
-                           ("warning", (xpth, "SublimeMessages.warning")),
-                           ("error", (xpth, "SublimeMessages.error"))])
+    markers = OrderedDict([("info",    (ipth, "SublimeMessages.info")),
+                           ("warning", (wpth, "SublimeMessages.warning")),
+                           ("error",   (epth, "SublimeMessages.error"))])
     prefix = "Sublemake"
     pretty_prefix = "Build"
 

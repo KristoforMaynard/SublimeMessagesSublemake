@@ -6,6 +6,8 @@ import re
 import sublime
 from collections import OrderedDict
 from operator import attrgetter
+import functools
+from timeit import default_timer as time
 
 from Default import exec
 
@@ -13,6 +15,8 @@ try:
     from SublimeMessages import message_manager
 except ImportError:
     from Messages import message_manager
+
+from . import threadpool
 
 def plugin_loaded():
     global build_msg_src
@@ -104,6 +108,10 @@ class BuildMessageSource(message_manager.LineMessageSource):
 class ExecCommand(exec.ExecCommand):
     _show_dir_opt = "-w"
 
+    # runnable_appender is the number of the appender thread that
+    # can run.
+    _appender_pool = None
+
     enter_re = None
     leave_re = None
     err_re = None
@@ -117,9 +125,37 @@ class ExecCommand(exec.ExecCommand):
     err_extra = None
     extra_err_parse = None
 
+    proc = None
+
 
     def run(self, **kwargs):
+        if kwargs.get("kill", False):
+            if self.proc:
+                pool = self._appender_pool
+                self._appender_pool = None
+                pool.dismissWorkers(1, do_join=False)
+
+                self.proc.kill()
+                self.proc = None
+                self.append_string(None, "[Cancelled]\n")
+
+                build_msg_src.parse_errors(self.window, self.output_view,
+                                           extra=self.err_extra,
+                                           root_dir=self.root)
+            return
+
+        # don't start a 2nd simultaneous build per window... to do
+        # this i would need better management of the threadpool, and
+        # exec.ExecCommand.append_data() doesn't handle 2 simultaneous
+        # builds anyway
+        if self.proc is not None:
+            # I guess I should alert the user that i'm ignoring their
+            # request here
+            sublime.error_message("A build is already in progress.")
+            return
+
         # print("EXEC")
+
         self.cdir = ""
         self.broken_line = None
         self.root = None
@@ -131,13 +167,6 @@ class ExecCommand(exec.ExecCommand):
 
         build_msg_src.clear_window(self.window)
         # self.window.run_command("clear_build_errors")
-
-        if kwargs.get("kill", False):
-            if self.proc:
-                self.proc.kill()
-                self.proc = None
-                self.append_string(None, "[Cancelled]\n")
-            return
 
         shell_cmd = kwargs.get("shell_cmd", None)
         cmd = kwargs.get("cmd", None)
@@ -179,10 +208,18 @@ class ExecCommand(exec.ExecCommand):
                 #     self.err_extra_re = re.compile(err_extra_re)
             self.err_extra = []
 
+        self._appender_pool = threadpool.ThreadPool(1)
+
         super(ExecCommand, self).run(**kwargs)
         # super().run(**kwargs)
 
         self.root = self.output_view.settings().get("result_base_dir")
+
+    def is_enabled(self, kill=False):
+        if kill:
+            return bool(self.proc and self.proc.poll())
+        else:
+            return True
 
     def append_data(self, proc, data):
         if self.extra_err_parse:
@@ -229,11 +266,11 @@ class ExecCommand(exec.ExecCommand):
                 print("Oops: ", e)
 
         super(ExecCommand, self).append_data(proc, data)
-        # super().append_data(proc, data)
 
     def finish(self, proc):
         if self.broken_line is not None:
             self.append_data(proc, "\n".encode())
+
         super(ExecCommand, self).finish(proc)
         # super().finish(proc)
         if self.broken_line is not None:
@@ -247,3 +284,22 @@ class ExecCommand(exec.ExecCommand):
         self.root = None
         self.make = None
         self.extra_err_parse = None
+        self.proc = None
+
+    def on_data(self, proc, data):
+        try:
+            req = threadpool.makeRequests(self.append_data, [((proc, data), {})])[0]
+            self._appender_pool.putRequest(req)
+        except AttributeError:
+            # build must have been cancelled, and the message will be dropped
+            pass
+
+    def on_finished(self, proc):
+        pool = self._appender_pool
+        self._appender_pool = None
+
+        pool.wait()
+        req = threadpool.makeRequests(self.finish, [((proc,), {})])[0]
+        pool.putRequest(req)
+        pool.wait()
+        pool.dismissWorkers(1)

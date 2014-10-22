@@ -221,10 +221,9 @@ class ExecCommand(exec.ExecCommand):
         else:
             return True
 
-    def append_data(self, proc, data):
+    def append_string(self, proc, data_str):
         if self.extra_err_parse:
             try:
-                data_str = data.decode(self.encoding)
                 data_arr = []
                 for line in data_str.splitlines(keepends=True):
                     if not line.endswith(('\n', '\r')):
@@ -260,21 +259,22 @@ class ExecCommand(exec.ExecCommand):
                         continue
                     data_arr.append("{0}".format(line))
 
-                data = ("".join(data_arr)).encode(self.encoding)
+                data_str = ("".join(data_arr))
             except Exception as e:
                 pass
                 print("Oops: ", e)
 
-        super(ExecCommand, self).append_data(proc, data)
+        super(ExecCommand, self).append_string(proc, data_str)
+        # self.output_view.run_command('append', {'characters': data_str, 'force': True, 'scroll_to_end': True})
 
     def finish(self, proc):
         if self.broken_line is not None:
-            self.append_data(proc, "\n".encode())
+            self.append_string(proc, "\n")
 
         super(ExecCommand, self).finish(proc)
         # super().finish(proc)
         if self.broken_line is not None:
-            self.append_data(proc, "\n".encode())
+            self.append_string(proc, "\n")
 
         build_msg_src.parse_errors(self.window, self.output_view,
                                    extra=self.err_extra,
@@ -288,7 +288,14 @@ class ExecCommand(exec.ExecCommand):
 
     def on_data(self, proc, data):
         try:
-            req = threadpool.makeRequests(self.append_data, [((proc, data), {})])[0]
+            s = data.decode(self.encoding)
+        except:
+            s = "[Decode error - output not " + self.encoding + "]\n"
+            proc = None
+        s = s.replace('\r\n', '\n').replace('\r', '\n')
+
+        try:
+            req = threadpool.makeRequests(self.append_string, [((proc, s), {})])[0]
             self._appender_pool.putRequest(req)
         except AttributeError:
             # build must have been cancelled, and the message will be dropped

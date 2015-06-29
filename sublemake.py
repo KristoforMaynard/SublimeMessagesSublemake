@@ -123,11 +123,16 @@ class ExecCommand(exec.ExecCommand):
             if self.proc:
                 pool = self._appender_pool
                 self._appender_pool = None
-                pool.dismissWorkers(1, do_join=False)
 
+                proc = self.proc
                 self.proc.kill()
                 self.proc = None
-                self.append_string(None, "[Cancelled]\n")
+
+                pool.wait()
+                req = threadpool.makeRequests(self.cancel, [((proc,), {})])[0]
+                pool.putRequest(req)
+                pool.wait()
+                pool.dismissWorkers(1, do_join=False)
 
                 build_msg_src.parse_errors(self.window, self.output_view,
                                            extra=self.err_extra,
@@ -256,6 +261,9 @@ class ExecCommand(exec.ExecCommand):
 
         super(ExecCommand, self).append_string(proc, data_str)
         # self.output_view.run_command('append', {'characters': data_str, 'force': True, 'scroll_to_end': True})
+
+    def cancel(self, proc):
+        self.append_string(proc, "[Cancelled]\n")
 
     def finish(self, proc):
         if self.broken_line is not None:

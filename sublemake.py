@@ -227,7 +227,7 @@ class ExecCommand(exec.ExecCommand):
 
         if eclipsing_previous:
             sublime.status_message("Building [Note: Disconnecting from the "
-                                   "output of the previous build]")
+                                   "previous build's output]")
 
         self.root = self.output_view.settings().get("result_base_dir")
 

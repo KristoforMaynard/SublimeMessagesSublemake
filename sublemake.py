@@ -119,6 +119,8 @@ class ExecCommand(exec.ExecCommand):
 
 
     def run(self, **kwargs):
+        eclipsing_previous = False
+
         if kwargs.get("kill", False):
             if self.proc:
                 pool = self._appender_pool
@@ -149,8 +151,7 @@ class ExecCommand(exec.ExecCommand):
             #         plugin is a giant hack
             # don't kill the previous process, just disconnect its output
             # from the console by killing the threadpool worker
-            sublime.status_message("Warning: Disconnecting from the output "
-                                   "of the previous build!")
+            eclipsing_previous = True
 
             pool = self._appender_pool
             self._appender_pool = None
@@ -223,6 +224,10 @@ class ExecCommand(exec.ExecCommand):
 
         super(ExecCommand, self).run(**kwargs)
         # super().run(**kwargs)
+
+        if eclipsing_previous:
+            sublime.status_message("Building [Note: Disconnecting from the "
+                                   "output of the previous build]")
 
         self.root = self.output_view.settings().get("result_base_dir")
 

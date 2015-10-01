@@ -144,10 +144,26 @@ class ExecCommand(exec.ExecCommand):
         # exec.ExecCommand.append_data() doesn't handle 2 simultaneous
         # builds anyway
         if self.proc is not None:
-            # I guess I should alert the user that i'm ignoring their
-            # request here
-            sublime.error_message("A build is already in progress.")
-            return
+            # HACK??  i think calling close on the proc's stdout / stderr
+            #         files is maybe a hack? But then again this entire
+            #         plugin is a giant hack
+            # don't kill the previous process, just disconnect its output
+            # from the console by killing the threadpool worker
+            sublime.status_message("Warning: Disconnecting from the output "
+                                   "of the previous build!")
+
+            pool = self._appender_pool
+            self._appender_pool = None
+            pool.wait()
+            pool.dismissWorkers(1, do_join=False)
+            self.proc.proc.stdout.close()
+            self.proc.proc.stderr.close()
+
+            build_msg_src.parse_errors(self.window, self.output_view,
+                                       extra=self.err_extra,
+                                       root_dir=self.root)
+            pool = None
+            self.proc = None
 
         # print("EXEC")
 
@@ -301,10 +317,15 @@ class ExecCommand(exec.ExecCommand):
 
     def on_finished(self, proc):
         pool = self._appender_pool
-        self._appender_pool = None
+        if pool:
+            self._appender_pool = None
 
-        pool.wait()
-        req = threadpool.makeRequests(self.finish, [((proc,), {})])[0]
-        pool.putRequest(req)
-        pool.wait()
-        pool.dismissWorkers(1)
+            pool.wait()
+            req = threadpool.makeRequests(self.finish, [((proc,), {})])[0]
+            pool.putRequest(req)
+            pool.wait()
+            pool.dismissWorkers(1)
+        else:
+            # probably a bulid that's been eclipsed by another build
+            pass
+

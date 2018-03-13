@@ -121,6 +121,11 @@ class ExecCommand(exec.ExecCommand):
     def run(self, **kwargs):
         eclipsing_previous = False
 
+        if not hasattr(self, 'output_view'):
+            # i think this happens on file load
+            # when args['update_phantoms_only'] == True
+            return
+
         if kwargs.get("kill", False):
             if self.proc:
                 pool = self._appender_pool
